@@ -9,7 +9,7 @@
 // --- Credentials ---
 const char* ssid      = "SoulRebel Rio";
 const char* password  = "PiedraBasal";
-const String botToken = "8789768602:AAEbIKs_MuO5ICy1kSLKmPmzReswu3xmIgg";
+const String botToken = "8711073411:AAEuk_jlMpOZl1igQ4AiFLc-Te4v41nvnqw";
 
 // --- User whitelist (3-tier: admin, preset, dynamic) ---
 // Admin users: hardcoded, can add/remove other users
@@ -1084,6 +1084,8 @@ void checkTelegramCommands() {
                 else if (text.startsWith("/addUser"))   cmd = "addUser";
                 else if (text.startsWith("/removeUser")) cmd = "removeUser";
                 else if (text.startsWith("/listUsers")) cmd = "listUsers";
+                else if (text.startsWith("/clear"))    cmd = "clear";
+                else if (text.startsWith("/wipe"))     cmd = "wipe";
                 else if (text.startsWith("/help") || text.startsWith("/start")) cmd = "help";
 
                 if (cmd.length() > 0) {
@@ -1168,6 +1170,7 @@ void checkTelegramCommands() {
                 }
             }
             msg += "\nHeap: " + String(ESP.getFreeHeap() / 1024) + "KB";
+            msg += "\nIP: " + WiFi.localIP().toString();
             msg += "\n" + notifyModeLabel(getUserNotifyMode(sid));
             sendTelegramTo(sid, msg);
         }
@@ -1250,6 +1253,48 @@ void checkTelegramCommands() {
             sendTelegramTo(sid, msg);
         }
 
+        if (cmd == "clear" && isAdmin(sid)) {
+            if (historyCount == 0) {
+                sendTelegramTo(sid, "No hay historial para guardar.");
+            } else {
+                archiveCount++;
+                String src = "/current.csv";
+                String dst = "/archive_" + String(archiveCount) + ".csv";
+                if (fsAvailable) {
+                    if (!LittleFS.rename(src, dst)) {
+                        File fin = LittleFS.open(src, "r");
+                        File fout = LittleFS.open(dst, "w");
+                        if (fin && fout) {
+                            fout.print("corrida,max_Lmin,volumen_L\n");
+                            int row = 1;
+                            while (fin.available()) {
+                                String line = fin.readStringUntil('\n');
+                                line.trim();
+                                if (line.length() == 0) continue;
+                                fout.print(row++); fout.print(","); fout.println(line);
+                            }
+                        }
+                        if (fin)  fin.close();
+                        if (fout) fout.close();
+                        LittleFS.remove(src);
+                    }
+                    File fc = LittleFS.open("/archivecount.txt", "w");
+                    if (fc) { fc.print(archiveCount); fc.close(); }
+                }
+                String ip = WiFi.localIP().toString();
+                sendTelegramTo(sid, "<b>Historial guardado</b> (" + String(historyCount) + " corridas)\n"
+                    "<a href=\"http://" + ip + "/archive?n=" + String(archiveCount) + "\">" + ip + "/archive?n=" + String(archiveCount) + "</a>");
+                historyCount = 0;
+            }
+        }
+
+        if (cmd == "wipe" && isAdmin(sid)) {
+            sendTelegramTo(sid, "&#9888; Flash borrado. Reiniciando...");
+            delay(1000);
+            LittleFS.format();
+            ESP.restart();
+        }
+
         if (cmd == "help") {
             String msg = "<b>Comandos disponibles</b>\n\n";
             msg += "/status - Estado actual del filtro\n";
@@ -1267,6 +1312,8 @@ void checkTelegramCommands() {
                 msg += "/addUser [chat_id] [nombre] - Autorizar usuario\n";
                 msg += "/removeUser [chat_id] - Eliminar usuario\n";
                 msg += "/listUsers - Listar usuarios autorizados\n";
+                msg += "/clear - Guardar y borrar historial\n";
+                msg += "/wipe - Borrar TODO el flash y reiniciar\n";
             }
             msg += "\nEstado: " + notifyModeLabel(getUserNotifyMode(sid));
             sendTelegramTo(sid, msg);
