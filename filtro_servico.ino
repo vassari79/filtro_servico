@@ -5,22 +5,7 @@
 #include <UrlEncode.h>
 #include <LittleFS.h>
 #include <time.h>
-
-// --- Credentials ---
-const char* ssid      = "SoulRebel Rio";
-const char* password  = "PiedraBasal";
-const String botToken = "8711073411:AAEuk_jlMpOZl1igQ4AiFLc-Te4v41nvnqw";
-
-// --- User whitelist (3-tier: admin, preset, dynamic) ---
-// Admin users: hardcoded, can add/remove other users
-const String ADMIN_USERS[] = { "632838405" };
-const String ADMIN_NAMES[] = { "Ariel (admin)" };
-const int NUM_ADMIN_USERS = sizeof(ADMIN_USERS) / sizeof(ADMIN_USERS[0]);
-
-// Preset users: hardcoded, can use bot but cannot manage users
-const String PRESET_USERS[] = { "8424609958" }; //"8305469685"
-const String PRESET_NAMES[] = { "Ariel (redmi)" }; //"Jessica"
-const int NUM_PRESET_USERS = sizeof(PRESET_USERS) / sizeof(PRESET_USERS[0]);
+#include "credentials.h"
 
 // Dynamic users: added at runtime via /addUser (admin-only)
 #define MAX_DYNAMIC_USERS 10
