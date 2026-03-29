@@ -806,6 +806,7 @@ void sendTelegramTo(const String& toId, String message) {
                  + "&parse_mode=HTML"
                  + "&text=" + urlEncode(message);
     http.begin(client, url);
+    http.setTimeout(5000);
     int code = http.GET();
     Serial.println("sendTg->" + toId + ": HTTP " + String(code));
     if (code <= 0) Serial.println("sendTg error: " + http.errorToString(code));
@@ -864,6 +865,7 @@ void sendTelegramPhotoTo(const String& toId, String photoUrl, String caption) {
     String apiUrl = "https://api.telegram.org/bot" + botToken + "/sendPhoto";
     String body = "chat_id=" + toId + "&photo=" + urlEncode(photoUrl) + "&caption=" + urlEncode(caption);
     http.begin(client, apiUrl);
+    http.setTimeout(5000);
     http.addHeader("Content-Type", "application/x-www-form-urlencoded");
     int code = http.POST(body);
     Serial.println("sendPhoto->" + toId + ": HTTP " + String(code));
@@ -916,6 +918,7 @@ void sendTelegramDocumentTo(const String& toId, const String& filePath, const St
         HTTPClient http;
         String apiUrl = "https://api.telegram.org/bot" + botToken + "/sendDocument";
         http.begin(client, apiUrl);
+        http.setTimeout(5000);
         http.addHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
         int code = http.POST(bodyStart + content + bodyEnd);
         Serial.println("sendDoc->" + toId + ": HTTP " + String(code) + " size=" + String(fileSize));
@@ -957,6 +960,7 @@ void sendTelegramDocumentTo(const String& toId, const String& filePath, const St
             client.setInsecure();
             HTTPClient http;
             http.begin(client, "https://api.telegram.org/bot" + botToken + "/sendDocument");
+            http.setTimeout(5000);
             http.addHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
             int code = http.POST(bodyStart + chunk + bodyEnd);
             Serial.println("sendDoc part" + String(part) + "->" + toId + ": HTTP " + String(code));
@@ -996,6 +1000,7 @@ void sendTelegramDocumentTo(const String& toId, const String& filePath, const St
         client.setInsecure();
         HTTPClient http;
         http.begin(client, "https://api.telegram.org/bot" + botToken + "/sendDocument");
+        http.setTimeout(5000);
         http.addHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
         int code = http.POST(bodyStart + chunk + bodyEnd);
         Serial.println("sendDoc part" + String(part) + "->" + toId + ": HTTP " + String(code));
@@ -1080,6 +1085,7 @@ void checkTelegramCommands() {
         String url = "https://api.telegram.org/bot" + botToken
                      + "/getUpdates?timeout=0&limit=5&offset=" + String(lastTgUpdateId + 1);
         http.begin(client, url);
+        http.setTimeout(5000);
         int code = http.GET();
         if (code != 200) { http.end(); return; }
 
