@@ -16,6 +16,10 @@ int numDynamicUsers = 0;
 // --- Flow sensor ---
 #define FLOW_PIN    27
 #define BUZZER_PIN  26
+
+// --- Auto-rotation ---
+#define MAX_HISTORY_ENTRIES 650
+#define MAX_ARCHIVE_FILES  3
 // Pulses per liter: YF-S201(1/2")=450, FS400A G1(1")=60
 // FS400A G1 DN25: F(Hz) = 4.8 * Q(L/min) → 4.8*60 = 288 pulses/liter
 // Adjust after calibrating with a known volume if needed
@@ -307,6 +311,8 @@ void loadLastUpdateId() {
     if (f) { lastTgUpdateId = f.readString().toInt(); f.close(); }
 }
 
+void autoArchiveIfNeeded();
+
 void appendRunToFlash(float maxFlow, float volume) {
     if (!fsAvailable) return;
     File f = LittleFS.open("/current.csv", "a");
@@ -315,6 +321,58 @@ void appendRunToFlash(float maxFlow, float volume) {
     f.print(maxFlow, 2); f.print(","); f.print(volume, 3); f.print(","); f.println(totalLiters, 3);
     f.close();
     saveTotalLiters();
+    historyCount++;
+    if (historyCount >= MAX_HISTORY_ENTRIES) {
+        autoArchiveIfNeeded();
+    }
+}
+
+void autoArchiveIfNeeded() {
+    if (!fsAvailable || historyCount < MAX_HISTORY_ENTRIES) return;
+
+    // Archive current.csv
+    archiveCount++;
+    String src = "/current.csv";
+    String dst = "/archive_" + String(archiveCount) + ".csv";
+    if (!LittleFS.rename(src, dst)) {
+        File fin = LittleFS.open(src, "r");
+        File fout = LittleFS.open(dst, "w");
+        if (fin && fout) {
+            while (fin.available()) {
+                String line = fin.readStringUntil('\n');
+                line.trim();
+                if (line.length() == 0) continue;
+                fout.println(line);
+            }
+        }
+        if (fin)  fin.close();
+        if (fout) fout.close();
+        LittleFS.remove(src);
+    }
+    File fc = LittleFS.open("/archivecount.txt", "w");
+    if (fc) { fc.print(archiveCount); fc.close(); }
+
+    int savedCount = historyCount;
+    historyCount = 0;
+
+    // Send the archived file to all admins
+    for (int i = 0; i < NUM_ADMIN_USERS; i++) {
+        sendTelegramDocumentTo(ADMIN_USERS[i], dst,
+            "Auto-archive: " + String(savedCount) + " corridas -> archive_" + String(archiveCount));
+    }
+
+    // Delete old archives beyond MAX_ARCHIVE_FILES
+    int oldest = archiveCount - MAX_ARCHIVE_FILES;
+    for (int i = oldest; i >= 1; i--) {
+        String old = "/archive_" + String(i) + ".csv";
+        if (LittleFS.exists(old)) {
+            LittleFS.remove(old);
+            Serial.println("Auto-rotation: deleted " + old);
+        }
+    }
+
+    Serial.printf("Auto-archived %d entries -> %s, kept last %d archives\n",
+                  savedCount, dst.c_str(), MAX_ARCHIVE_FILES);
 }
 
 void countHistoryFromFlash() {
@@ -1166,6 +1224,7 @@ void checkTelegramCommands() {
                 }
             }
             msg += "\nHeap: " + String(ESP.getFreeHeap() / 1024) + "KB";
+            msg += "\nFlash: " + String(LittleFS.usedBytes() / 1024) + "/" + String(LittleFS.totalBytes() / 1024) + "KB";
             msg += "\nIP: " + WiFi.localIP().toString();
             msg += "\n" + notifyModeLabel(getUserNotifyMode(sid));
             sendTelegramTo(sid, msg);
@@ -1390,6 +1449,9 @@ void setup() {
         Serial.println("LittleFS mount failed");
     }
     fsAvailable = true;
+    Serial.printf("LittleFS: %u used / %u total bytes (%.1f%% free)\n",
+                  LittleFS.usedBytes(), LittleFS.totalBytes(),
+                  100.0 * (1.0 - (float)LittleFS.usedBytes() / LittleFS.totalBytes()));
     File fc = LittleFS.open("/archivecount.txt", "r");
     if (fc) { archiveCount = fc.readString().toInt(); fc.close(); }
     loadTotalLiters();
