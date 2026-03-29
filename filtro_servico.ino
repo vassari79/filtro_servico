@@ -311,6 +311,17 @@ void loadTotalLiters() {
     if (f) { totalLiters = f.readString().toFloat(); f.close(); }
 }
 
+void saveLastUpdateId() {
+    if (!fsAvailable) return;
+    File f = LittleFS.open("/lastupdateid.txt", "w");
+    if (f) { f.print(lastTgUpdateId); f.close(); }
+}
+
+void loadLastUpdateId() {
+    File f = LittleFS.open("/lastupdateid.txt", "r");
+    if (f) { lastTgUpdateId = f.readString().toInt(); f.close(); }
+}
+
 void appendRunToFlash(float maxFlow, float volume) {
     if (!fsAvailable) return;
     File f = LittleFS.open("/current.csv", "a");
@@ -1041,7 +1052,7 @@ void checkTelegramCommands() {
             int numEnd = body.indexOf(',', numStart);
             if (numEnd < 0) numEnd = body.indexOf('}', numStart);
             long uid = body.substring(numStart, numEnd).toInt();
-            if (uid > lastTgUpdateId) lastTgUpdateId = uid;
+            if (uid > lastTgUpdateId) { lastTgUpdateId = uid; saveLastUpdateId(); }
 
             int nextUid = body.indexOf("\"update_id\":", numEnd);
             int blockEnd = (nextUid > 0) ? nextUid : body.length();
@@ -1290,8 +1301,16 @@ void checkTelegramCommands() {
 
         if (cmd == "wipe" && isAdmin(sid)) {
             sendTelegramTo(sid, "&#9888; Flash borrado. Reiniciando...");
-            delay(1000);
+            // Save the advanced update ID before format so after reboot it starts past this command
+            lastTgUpdateId++;
+            // format() wipes the file, so we write it to NVS-style workaround: just advance the ID.
+            // The format will clear lastupdateid.txt, but we persist it BEFORE formatting:
+            saveLastUpdateId();
+            delay(500);
             LittleFS.format();
+            // Re-save after format (file was wiped, write it fresh):
+            File fid = LittleFS.open("/lastupdateid.txt", "w");
+            if (fid) { fid.print(lastTgUpdateId); fid.close(); }
             ESP.restart();
         }
 
@@ -1389,6 +1408,7 @@ void setup() {
     File fc = LittleFS.open("/archivecount.txt", "r");
     if (fc) { archiveCount = fc.readString().toInt(); fc.close(); }
     loadTotalLiters();
+    loadLastUpdateId();
     countHistoryFromFlash();
     Serial.println("Loading users...");
     // Initialize default notify modes, then load saved prefs
